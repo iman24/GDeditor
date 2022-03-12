@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="./assets/bootstrap/css/bootstrap.min.css">
+</head>
+
+<body>
+
+    <!-- As a heading -->
+    <nav class="navbar navbar-dark bg-dark">
+        <div class="container">
+            <span class="navbar-brand mb-0 h1">Guide X11</span>
+        </div>
+    </nav>
+
+   
+    <!-- No need define action because has been handled by function saveData()
+        automatically trigger with name=submit by 'save' plugin -->
+    
+
+    <div class="alert alert-warning">
+        <div class="container" id="h3">Please wait...</div>
+    </div>
+
+
+    <div class="container">   
+        <div class="row">
+            <div class="col col-9">
+                <div class="card">
+                    <div class="card-header">Write here</div>
+                    <div class="card-body">
+                        <form action="">
+                            <textarea name="ckeditor" id="ckeditor" style="height:100%"></textarea>
+                            <input type="hidden" name="submit" onclick="saveData()">
+                        </form>                    
+                    </div>
+                </div>
+            </div>
+
+            <div class="col col-3">
+                <div class="card">
+                    <div class="card-header">List files</div>
+                    <div class="card-body">
+                        <ul id="ul" class="list-item-group">
+
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+    <script src="./assets/jquery.js"></script>
+    <script src="./assets/bootstrap/js/bootstrap.min.js"></script>
+    <script src="./ckeditor/ckeditor.js"></script>
+    <script>
+        // i am using default config.js of ckeditor, located in ./ckeditor/config.js
+        // save data with ckeditor: https://ckeditor.com/docs/ckeditor4/latest/guide/dev_savedata.html
+
+        // get ckeditor textarea
+        CKEDITOR.replace("ckeditor");
+
+        // interval autosave in miliseconds
+        var TIME_AUTOSAVE = 60000;
+
+        // get queryString
+        var param = new URLSearchParams(location.search);
+        var AKSI = param.get("act");
+        var FILE = param.get("file");
+
+
+        // source: https://stackoverflow.com/a/68503
+        // AJAX Loading...
+        var $loading = $('#h3');
+        $(document)
+            .ajaxStart(function () {
+                $loading.text("Saving data...");
+            })
+            .ajaxStop(function () {
+                //$loading.hide();
+            });
+
+
+        listFiles();
+        aksi();
+
+        // function for aksi
+        function aksi(){
+            switch(AKSI) {
+                case "edit":
+                    getData(FILE);
+                    break;
+            }
+        }
+
+
+        /**
+         * Autosave function
+         * */
+
+        (function () {
+
+
+            let remaining = TIME_AUTOSAVE;
+            setInterval(function(){
+                if (remaining == 0) {
+                    remaining = TIME_AUTOSAVE;
+                }
+                $loading.text("Autosave in " + remaining/1000 + " sec");
+                remaining -= 1000;
+            }, 1000);
+
+            setInterval(function () {
+
+                let dataCkeditor = CKEDITOR.instances.ckeditor.getData();
+                console.log(dataCkeditor);
+                if (dataCkeditor == "" || dataCkeditor == null)
+                    return false;
+
+                let file = FILE;
+                if (FILE == null) {
+                    file = ".tmpdata";
+                }
+
+                console.log("Updating file: " + file);
+
+                $.ajax({
+                    url: "data.php?act=getlen&file=" + file,
+                    method: "GET",
+                    success: function (response) {
+                        if(response != CKEDITOR.instances.ckeditor.getData().length) {
+                            console.log("File: " + response);
+                            console.log("Editor: " + CKEDITOR.instances.ckeditor.getData().length);
+                            $loading.text("Autosave...")
+                            setTimeout(function () {
+                                saveDataAjax(file);
+                            }, 500);
+                        } else {
+                            $loading.text("Nothing to update.skipped...");
+                            console.log("File same autoupdate skipped..");
+                        }
+                    }
+                });
+
+
+            }, TIME_AUTOSAVE);
+
+        })();
+
+
+
+        /**
+         * Save data of files with new name
+         * */
+        function saveData() {
+
+            // ask filename before send data
+            var conf = prompt("Filename: ");
+            if (conf == null) {
+                return false;
+            }
+
+            
+
+            saveDataAjax(conf);
+            window.location.href = "?act=edit&file=" + conf;
+            
+
+        }
+
+         /**
+         * Save data of files
+         * */
+        function saveDataAjax(conf) {
+            // send data with ajax
+            $.ajax({
+                url: "data.php?act=save",
+                method: "POST",
+                data: { data: CKEDITOR.instances.ckeditor.getData(), file: conf },
+                success: function (response) {
+
+                    listFiles();
+                    $loading.text(response);
+                   
+
+                }
+            });
+        }
+
+
+        /**
+         * 
+         * AJAX return list of files
+         * */
+
+        function listFiles() {
+            $.ajax({
+                url: "data.php?act=list",
+                method: "GET",
+                success: function (response) {
+                    let li = JSON.parse(response);
+                    let html = "";
+                    for(let i of li['files']) {
+                        html += "<li class='list-item'>" + i + " <a href='?act=edit&file="+i+"'>edit</a></li>";
+                    }
+
+                    $("#ul").html(html);
+
+
+                }
+            });
+        }
+
+        /**
+         * get content of files
+         * 
+         */
+
+        function getData(file){
+            $.ajax({
+                url: "data.php?act=get&file=" + file,
+                method: "GET",
+                success: function (response) {
+                    $("#ckeditor").val(response);
+                }
+            });
+        }
+
+    </script>
+</body>
+
+</html>
